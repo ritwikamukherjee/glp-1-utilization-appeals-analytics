@@ -1,0 +1,16 @@
+bundle:
+  name: appeals-analytics
+
+variables:
+  catalog:
+    default: hls_amer_catalog
+  schema:
+    default: rmukherjee
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true

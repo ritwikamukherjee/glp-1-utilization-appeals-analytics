@@ -1,0 +1,15 @@
+resources:
+  pipelines:
+    appeals_analytics_pipeline:
+      name: appeals_analytics_pipeline
+      target: ${var.schema}
+      catalog: ${var.catalog}
+      libraries:
+        - file:
+            path: ../pipeline/01_bronze.sql
+        - file:
+            path: ../pipeline/02_silver.sql
+        - file:
+            path: ../pipeline/03_gold.sql
+      channel: PREVIEW
+      development: true
