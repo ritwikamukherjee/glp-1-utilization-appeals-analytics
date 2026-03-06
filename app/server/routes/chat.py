@@ -62,9 +62,51 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
 
 
+def _extract_steps(body: dict) -> list[dict]:
+    """Extract intermediate tool calls and thinking from the MAS response."""
+    output = body.get("output", body)
+    if not isinstance(output, list) or len(output) < 2:
+        return []
+
+    steps = []
+    # Everything except the last item is intermediate
+    for item in output[:-1]:
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type", "")
+
+        if item_type == "function_call":
+            steps.append({
+                "type": "tool_call",
+                "name": item.get("name", "unknown"),
+                "arguments": item.get("arguments", ""),
+            })
+        elif item_type == "function_result":
+            steps.append({
+                "type": "tool_result",
+                "name": item.get("name", ""),
+                "output": item.get("output", ""),
+            })
+        elif item_type == "message" or item.get("role"):
+            # Intermediate assistant/system message → treat as thinking
+            content = item.get("content", "")
+            if isinstance(content, list):
+                parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        parts.append(block.get("text", str(block)))
+                    elif isinstance(block, str):
+                        parts.append(block)
+                content = "\n".join(parts)
+            if content:
+                steps.append({"type": "thinking", "content": str(content)})
+    return steps
+
+
 class ChatResponse(BaseModel):
     response: str
     conversation_id: str
+    steps: list[dict] = []
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -98,11 +140,12 @@ async def chat(req: ChatRequest):
                     error_msg = body.get("message", body.get("error", str(body)))
                     raise ValueError(f"MAS returned {resp.status}: {error_msg}")
 
-                # Extract assistant message from various response formats
+                # Extract assistant message and intermediate steps
                 assistant_message = _extract_message(body)
+                steps = _extract_steps(body)
 
         history.append({"role": "assistant", "content": assistant_message})
-        return ChatResponse(response=assistant_message, conversation_id=conversation_id)
+        return ChatResponse(response=assistant_message, conversation_id=conversation_id, steps=steps)
 
     except Exception as e:
         logger.exception(f"MAS endpoint error: {e}")

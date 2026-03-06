@@ -28,6 +28,70 @@ function MetricCard({ label, value, sub, color = 'teal' }) {
   )
 }
 
+function ToolSteps({ steps }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!steps || steps.length === 0) return null
+
+  const toolCalls = steps.filter(s => s.type === 'tool_call')
+  const summary = toolCalls.length > 0
+    ? `Used ${toolCalls.length} tool${toolCalls.length > 1 ? 's' : ''}: ${toolCalls.map(t => t.name).join(', ')}`
+    : `${steps.length} intermediate step${steps.length > 1 ? 's' : ''}`
+
+  return (
+    <div className="mb-2 text-xs">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-slate-400 hover:text-teal-400 transition-colors"
+      >
+        <svg className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <span>{summary}</span>
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2 pl-5 border-l border-slate-700">
+          {steps.map((step, i) => (
+            <div key={i} className="bg-slate-900 rounded-lg p-2.5 ring-1 ring-slate-700">
+              {step.type === 'tool_call' && (
+                <>
+                  <div className="flex items-center gap-1.5 text-teal-400 font-medium mb-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {step.name}
+                  </div>
+                  {step.arguments && (
+                    <pre className="text-slate-400 font-mono text-[11px] whitespace-pre-wrap break-all overflow-x-auto max-h-32 overflow-y-auto">{typeof step.arguments === 'string' ? step.arguments : JSON.stringify(step.arguments, null, 2)}</pre>
+                  )}
+                </>
+              )}
+              {step.type === 'tool_result' && (
+                <>
+                  <div className="flex items-center gap-1.5 text-slate-400 font-medium mb-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Result{step.name ? `: ${step.name}` : ''}
+                  </div>
+                  <pre className="text-slate-500 font-mono text-[11px] whitespace-pre-wrap break-all overflow-x-auto max-h-32 overflow-y-auto">{typeof step.output === 'string' ? step.output : JSON.stringify(step.output, null, 2)}</pre>
+                </>
+              )}
+              {step.type === 'thinking' && (
+                <p className="text-slate-400 italic">{step.content}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -69,7 +133,7 @@ function App() {
       }
       const data = await res.json()
       setConversationId(data.conversation_id)
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.response }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.response, steps: data.steps || [] }])
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -259,10 +323,10 @@ function App() {
                 <p className="text-sm mb-6">Ask about member claims, appeals, or Medicare rights.</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {[
-                    'Tell me about member MBR-0042',
-                    'What is the status of appeal APL-1001?',
-                    'Explain the Medicare appeals process',
-                    'Show denied claims for last month',
+                    'What are the GLP-1 medications covered under Medicare Part D?',
+                    'Show appeals related to Ozempic or Wegovy denials',
+                    'What are common denial reasons for GLP-1 prescriptions?',
+                    'How do I appeal a prior authorization denial for semaglutide?',
                   ].map((q) => (
                     <button
                       key={q}
@@ -292,6 +356,7 @@ function App() {
                       : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-bl-sm'
                   }`}
                 >
+                  {msg.role === 'assistant' && <ToolSteps steps={msg.steps} />}
                   {msg.content}
                 </div>
               </div>
