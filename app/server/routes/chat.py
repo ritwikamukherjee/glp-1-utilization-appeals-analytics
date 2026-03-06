@@ -109,6 +109,35 @@ class ChatResponse(BaseModel):
     steps: list[dict] = []
 
 
+MAX_APPROVAL_ROUNDS = 10
+
+
+def _needs_approval(body: dict) -> list[dict]:
+    """Return list of mcp_approval_request items from the response, if any."""
+    output = body.get("output", [])
+    if not isinstance(output, list):
+        return []
+    return [item for item in output if isinstance(item, dict) and item.get("type") == "mcp_approval_request"]
+
+
+def _build_approval_input(history: list[dict], body: dict) -> list[dict]:
+    """Build a new input that includes the original history, the MAS output items,
+    and auto-approval responses for each mcp_approval_request."""
+    output = body.get("output", [])
+    # Start with conversation history, then append all output items
+    new_input = list(history) + list(output)
+    # Append approval responses
+    for item in output:
+        if isinstance(item, dict) and item.get("type") == "mcp_approval_request":
+            new_input.append({
+                "type": "mcp_approval_response",
+                "id": f"auto_approve_{item['id']}",
+                "approval_request_id": item["id"],
+                "approve": True,
+            })
+    return new_input
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     conversation_id = req.conversation_id or str(uuid.uuid4())
@@ -118,6 +147,8 @@ async def chat(req: ChatRequest):
 
     history = _conversations[conversation_id]
     history.append({"role": "user", "content": req.message})
+
+    all_steps: list[dict] = []
 
     try:
         host, token = get_serving_credentials()
@@ -129,23 +160,40 @@ async def chat(req: ChatRequest):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        payload = {"input": history}
+        current_input = list(history)
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers) as resp:
-                body = await resp.json()
-                logger.info(f"MAS response status={resp.status} keys={list(body.keys()) if isinstance(body, dict) else type(body)}")
+            for round_num in range(MAX_APPROVAL_ROUNDS):
+                payload = {"input": current_input}
+                async with session.post(url, json=payload, headers=headers) as resp:
+                    body = await resp.json()
+                    logger.info(f"MAS round={round_num} status={resp.status} output_items={len(body.get('output', []))}")
 
-                if resp.status != 200:
-                    error_msg = body.get("message", body.get("error", str(body)))
-                    raise ValueError(f"MAS returned {resp.status}: {error_msg}")
+                    if resp.status != 200:
+                        error_msg = body.get("message", body.get("error", str(body)))
+                        raise ValueError(f"MAS returned {resp.status}: {error_msg}")
 
-                # Extract assistant message and intermediate steps
-                assistant_message = _extract_message(body)
-                steps = _extract_steps(body)
+                    # Collect intermediate steps from this round
+                    all_steps.extend(_extract_steps(body))
 
+                    approval_requests = _needs_approval(body)
+                    if not approval_requests:
+                        # No more approvals needed — we have the final answer
+                        break
+
+                    # Auto-approve and loop
+                    logger.info(f"Auto-approving {len(approval_requests)} MCP tool(s): {[r.get('name') for r in approval_requests]}")
+                    for ar in approval_requests:
+                        all_steps.append({
+                            "type": "tool_call",
+                            "name": ar.get("name", "unknown"),
+                            "arguments": ar.get("arguments", ""),
+                        })
+                    current_input = _build_approval_input(history, body)
+
+        assistant_message = _extract_message(body)
         history.append({"role": "assistant", "content": assistant_message})
-        return ChatResponse(response=assistant_message, conversation_id=conversation_id, steps=steps)
+        return ChatResponse(response=assistant_message, conversation_id=conversation_id, steps=all_steps)
 
     except Exception as e:
         logger.exception(f"MAS endpoint error: {e}")
