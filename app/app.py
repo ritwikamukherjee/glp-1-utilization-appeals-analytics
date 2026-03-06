@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from server.routes.chat import router as chat_router
 from server.routes.summary import router as summary_router
 
-app = FastAPI(title="Medicare Appeals Chat")
+app = FastAPI(title="GLP-1 Claims & Appeals Assistant")
 
 # ── API routes ────────────────────────────────────────────────────────────────
 app.include_router(chat_router, prefix="/api")

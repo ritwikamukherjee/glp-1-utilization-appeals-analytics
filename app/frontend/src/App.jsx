@@ -158,8 +158,8 @@ function App() {
       {/* Header */}
       <header className="bg-slate-900 border-b border-slate-800 text-white px-6 py-3 shadow-md flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Medicare Appeals Assistant</h1>
-          <p className="text-teal-400 text-xs">Powered by Databricks Multi-Agent System</p>
+          <h1 className="text-lg font-semibold tracking-tight">GLP-1 Claims & Appeals Assistant</h1>
+          <p className="text-teal-400 text-xs">Utilization & Adjudication Analytics — Powered by Databricks</p>
         </div>
         <nav className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
           {['dashboard', 'chat'].map(t => (
@@ -297,7 +297,7 @@ function App() {
                   onClick={() => setTab('chat')}
                   className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-500 transition-colors shadow-sm"
                 >
-                  Ask the Appeals Assistant
+                  Ask the GLP-1 Assistant
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
@@ -320,10 +320,10 @@ function App() {
                   </svg>
                 </div>
                 <p className="text-base font-medium text-slate-300 mb-1">How can I help?</p>
-                <p className="text-sm mb-6">Ask about member claims, appeals, or Medicare rights.</p>
+                <p className="text-sm mb-6">Ask about GLP-1 claims, appeals, or utilization patterns.</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {[
-                    'What are the GLP-1 medications covered under Medicare Part D?',
+                    'What are the GLP-1 medications covered under Part D?',
                     'Show appeals related to Ozempic or Wegovy denials',
                     'What are common denial reasons for GLP-1 prescriptions?',
                     'How do I appeal a prior authorization denial for semaglutide?',
