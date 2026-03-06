@@ -1,6 +1,6 @@
 # Medicare Appeals Analytics
 
-End-to-end Databricks solution for Medicare appeals analysis: synthetic data generation, a Lakeflow (DLT) medallion pipeline, a Multi-Agent Supervisor (MAS) chatbot, LLM-as-judge evaluation, and a deployed Databricks App with a React frontend.
+End-to-end Databricks solution for Medicare GLP-1 utilization and appeals analysis: synthetic data generation, a Genie Space with metric views, DBSQL functions, a Multi-Agent Supervisor (MAS) chatbot, LLM-as-judge evaluation, and a deployed Databricks App with a React frontend.
 
 ## Architecture
 
@@ -8,13 +8,11 @@ End-to-end Databricks solution for Medicare appeals analysis: synthetic data gen
 data_generation/          Faker-based PySpark notebook (6 tables)
         │
         ▼
-pipeline/                 Lakeflow DLT (bronze → silver → gold)
-  01_bronze.sql
-  02_silver.sql
-  03_gold.sql
+Genie Space               NL → SQL over tables + metric views
+DBSQL Functions            Direct member/claim/appeal lookups
         │
         ▼
-MAS Agent (Databricks)    Multi-Agent Supervisor + Genie + MCP tool
+MAS Agent (Databricks)    Multi-Agent Supervisor + Genie + DBSQL + MCP
         │
         ▼
 app/                      Databricks App (FastAPI + React)
@@ -48,10 +46,10 @@ agent/                    MLflow LLM judges (5 scorers)
           ┌────────▼───────┐ ┌───▼────────┐ ┌───▼──────────────┐
           │  Genie Space   │ │ DBSQL Fns  │ │  MCP Tool        │
           │  (NL → SQL)    │ │ (direct    │ │  (Part D data)   │
-          │                │ │  queries)  │ │                  │
-          │  Gold-layer    │ │  Claims    │ │  mcp-partd       │
-          │  tables from   │ │  Appeals   │ │  .medseal.app    │
-          │  DLT pipeline  │ │  Members   │ │                  │
+          │                │ │  lookups)  │ │                  │
+          │  Metric views  │ │  Claims    │ │  mcp-partd       │
+          │  + source      │ │  Appeals   │ │  .medseal.app    │
+          │  tables        │ │  Members   │ │                  │
           │                │ │  Eligib.   │ │  Formulary,      │
           │  Appeals stats │ │  PAs       │ │  pricing,        │
           │  Denial trends │ │            │ │  coverage data   │
@@ -61,11 +59,11 @@ agent/                    MLflow LLM judges (5 scorers)
                    ▼             ▼              ▼
           ┌──────────────────────────────────────────────────┐
           │              Unity Catalog                        │
-          │   catalog.schema.bronze_*  / silver_*  / gold_*  │
+          │         catalog.schema.{tables}                   │
           └──────────────────────────────────────────────────┘
 ```
 
-**Flow**: The supervisor receives a user message, decides which tool(s) to invoke (Genie for analytical questions, DBSQL functions for member/claim lookups, MCP for external drug data), aggregates the results, and returns a unified response. All tool calls are traced via MLflow, where 5 LLM judges continuously evaluate quality.
+**Flow**: The supervisor receives a user message, decides which tool(s) to invoke (Genie for analytical questions over metric views, DBSQL functions for member/claim/appeal lookups, MCP for external Part D drug data), aggregates the results, and returns a unified response. All tool calls are traced via MLflow, where 5 LLM judges continuously evaluate quality.
 
 ## Prerequisites
 
@@ -88,7 +86,6 @@ Edit the following variables for your environment:
 | File | Variable | Description |
 |---|---|---|
 | `data_generation/generate_data.py` | `CATALOG`, `SCHEMA` | Target Unity Catalog location |
-| `databricks.yml` | `variables.catalog`, `variables.schema` | Same as above (for DABs) |
 | `agent/register_judges.py` | `EXPERIMENT_ID` | Your MLflow experiment ID |
 | `app/app.yaml` | `MAS_ENDPOINT_NAME` | Your MAS serving endpoint |
 
@@ -96,31 +93,28 @@ Edit the following variables for your environment:
 
 Import `data_generation/generate_data.py` as a Databricks notebook and run all cells. This creates 6 tables (~1,450 rows total) in your catalog/schema.
 
-### 3. Deploy the DLT pipeline
-
-```bash
-databricks bundle deploy -p <your-profile>
-databricks bundle run appeals_analytics_pipeline -p <your-profile>
-```
-
-This creates bronze/silver/gold views and tables via Lakeflow Declarative Pipelines.
-
-### 4. Create a Genie Space
+### 3. Create a Genie Space
 
 In the Databricks UI:
 1. Go to **Genie** and create a new space
-2. Add the gold-layer tables from your schema
-3. Add general instructions describing the Medicare appeals domain
-4. Note the Genie Space ID for the MAS agent configuration
+2. Add the source tables from your schema
+3. Add metric views for appeals stats, denial trends, overturn rates
+4. Add general instructions describing the Medicare appeals domain
+5. Note the Genie Space ID for the MAS agent configuration
+
+### 4. Create DBSQL Functions
+
+Create SQL functions in your schema for direct lookups (member info, claim details, appeal status, eligibility checks, prior auth details). These are registered as tools in the MAS agent.
 
 ### 5. Set up the MAS Agent
 
 In the Databricks UI:
 1. Go to **Playground → Multi-Agent Supervisor**
 2. Add a **Genie** tool pointing to your Genie Space
-3. Add an **MCP** tool with endpoint: `https://mcp-partd.medseal.app/mcp`
-4. Review and deploy the agent to a serving endpoint
-5. Note the endpoint name (used in `app/app.yaml`)
+3. Add **DBSQL function** tools for member/claim/appeal lookups
+4. Add an **MCP** tool with endpoint: `https://mcp-partd.medseal.app/mcp`
+5. Review and deploy the agent to a serving endpoint
+6. Note the endpoint name (used in `app/app.yaml`)
 
 ### 6. Deploy the app
 
@@ -199,11 +193,5 @@ appeals-analytics/
 │   └── register_judges.py        5 LLM-as-judge scorers
 ├── data_generation/
 │   └── generate_data.py          Synthetic data notebook
-├── pipeline/
-│   ├── 01_bronze.sql             Raw table ingestion
-│   ├── 02_silver.sql             Cleaned / typed tables
-│   └── 03_gold.sql               Aggregated analytics views
-├── resources/
-│   └── appeals_pipeline.yml      DLT pipeline resource config
 └── databricks.yml                DAB bundle definition
 ```

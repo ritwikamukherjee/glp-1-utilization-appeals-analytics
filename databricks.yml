@@ -7,9 +7,6 @@ variables:
   schema:
     default: rmukherjee
 
-include:
-  - resources/*.yml
-
 targets:
   dev:
     mode: development
