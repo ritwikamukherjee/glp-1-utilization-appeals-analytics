@@ -120,13 +120,13 @@ def _needs_approval(body: dict) -> list[dict]:
     return [item for item in output if isinstance(item, dict) and item.get("type") == "mcp_approval_request"]
 
 
-def _build_approval_input(history: list[dict], body: dict) -> list[dict]:
-    """Build a new input that includes the original history, the MAS output items,
-    and auto-approval responses for each mcp_approval_request."""
+def _append_approvals(current_input: list[dict], body: dict) -> list[dict]:
+    """Append the MAS output items and auto-approval responses to the running
+    conversation chain, preserving all previous rounds."""
     output = body.get("output", [])
-    # Start with conversation history, then append all output items
-    new_input = list(history) + list(output)
-    # Append approval responses
+    # Carry forward the full chain and append this round's output
+    new_input = list(current_input) + list(output)
+    # Append approval responses for each request in this round
     for item in output:
         if isinstance(item, dict) and item.get("type") == "mcp_approval_request":
             new_input.append({
@@ -189,7 +189,7 @@ async def chat(req: ChatRequest):
                             "name": ar.get("name", "unknown"),
                             "arguments": ar.get("arguments", ""),
                         })
-                    current_input = _build_approval_input(history, body)
+                    current_input = _append_approvals(current_input, body)
 
         assistant_message = _extract_message(body)
         history.append({"role": "assistant", "content": assistant_message})
