@@ -323,10 +323,10 @@ function App() {
                 <p className="text-sm mb-6">Ask about GLP-1 claims, appeals, or utilization patterns.</p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {[
-                    'What are the GLP-1 medications covered under Part D?',
+                    'What does recent research say about GLP-1 cardiovascular benefits?',
+                    'Benchmark provider PRV-0012 against specialty peers on denial rates',
                     'Show appeals related to Ozempic or Wegovy denials',
-                    'What are common denial reasons for GLP-1 prescriptions?',
-                    'How do I appeal a prior authorization denial for semaglutide?',
+                    'Are there active clinical trials for tirzepatide in heart failure?',
                   ].map((q) => (
                     <button
                       key={q}
