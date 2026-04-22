@@ -1,0 +1,174 @@
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#1565C0"
+    primaryTextColor: "#ffffff"
+    primaryBorderColor: "#0D47A1"
+    lineColor: "#546E7A"
+    secondaryColor: "#00695C"
+    tertiaryColor: "#E3F2FD"
+    background: "#FAFAFA"
+    mainBkg: "#E3F2FD"
+    nodeBorder: "#1565C0"
+    clusterBkg: "#F5F5F5"
+    clusterBorder: "#90A4AE"
+    titleColor: "#1A237E"
+    edgeLabelBackground: "#FFFFFF"
+    fontFamily: "Segoe UI, Arial, sans-serif"
+  flowchart:
+    curve: basis
+    padding: 20
+    nodeSpacing: 50
+    rankSpacing: 60
+---
+flowchart TB
+    TITLE["<b>Databricks ↔ MongoDB Atlas Connectivity Architecture</b>"]
+    style TITLE fill:#1A237E,color:#ffffff,stroke:#1A237E,font-size:18px,padding:12px
+
+    %% ─────────────────────────────────────────
+    %% PATTERN 1
+    %% ─────────────────────────────────────────
+    subgraph P1["Pattern 1 — Classic Compute: Spark Connector (Read/Write ETL)"]
+        direction LR
+
+        subgraph P1_DB["Databricks — Classic Cluster (Dedicated Mode)"]
+            direction TB
+            SC["⚙️ MongoDB Spark\nConnector v10.5+ JAR"]
+            CC["🔵 Classic Cluster\n(Dedicated Mode)"]
+            CC --> SC
+        end
+
+        P1_NET["🔶 VPC / VNet Peering"]
+
+        subgraph P1_MDB["MongoDB Atlas"]
+            MDB1["🍃 Atlas Dedicated\nCluster (M10+)"]
+        end
+
+        subgraph P1_DELTA["Delta Tables (Medallion)"]
+            direction LR
+            BRZ["🥉 Bronze\n(Raw)"]
+            SLV["🥈 Silver\n(Cleaned)"]
+            GLD["🥇 Gold\n(Aggregated)"]
+            BRZ --> SLV --> GLD
+        end
+
+        SC <-->|"Read / Write"| P1_NET
+        P1_NET <-->|"Read / Write"| MDB1
+        SC -->|"Ingest / Write Back"| BRZ
+    end
+
+    style P1 fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#1B5E20
+    style P1_DB fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px
+    style P1_MDB fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px
+    style P1_DELTA fill:#FFF8E1,stroke:#F9A825,stroke-width:1.5px
+    style P1_NET fill:#FFE0B2,stroke:#E65100,stroke-width:1.5px,color:#BF360C
+
+    %% ─────────────────────────────────────────
+    %% PATTERN 2
+    %% ─────────────────────────────────────────
+    subgraph P2["Pattern 2 — Serverless Compute: Ingest-to-Delta (Recommended)"]
+        direction LR
+
+        subgraph P2_INGEST["Ingestion Layer"]
+            direction TB
+            CC2["🔵 Classic Compute\n(Initial Ingest)"]
+            LFC2["✦ Lakeflow Connect\n(MongoDB Source)"]
+            style LFC2 fill:#ECEFF1,stroke:#78909C,stroke-width:1.5px,stroke-dasharray:6 4,color:#37474F
+        end
+
+        subgraph P2_MDB["MongoDB Atlas"]
+            MDB2["🍃 Atlas Dedicated\nCluster (M10+)"]
+        end
+
+        subgraph P2_DELTA["Delta Tables (Unity Catalog Governed)"]
+            DT2["Δ Delta Tables"]
+        end
+
+        subgraph P2_CONSUME["Serverless Consumption"]
+            direction TB
+            SW["🔵 Serverless SQL\nWarehouses"]
+            SN["🔵 Serverless\nNotebooks"]
+            AIBI["📊 AI/BI Dashboards"]
+            AGT["🤖 Agent Workloads"]
+        end
+
+        CC2 -->|"Ingest"| DT2
+        LFC2 -.->|"In Development"| DT2
+        MDB2 -->|"Source Data"| CC2
+        MDB2 -.->|"In Development"| LFC2
+        DT2 --> SW
+        DT2 --> SN
+        SW --> AIBI
+        SN --> AGT
+    end
+
+    style P2 fill:#E8EAF6,stroke:#3949AB,stroke-width:2px,color:#1A237E
+    style P2_INGEST fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px
+    style P2_MDB fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px
+    style P2_DELTA fill:#FFF8E1,stroke:#F9A825,stroke-width:1.5px
+    style P2_CONSUME fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px
+
+    %% ─────────────────────────────────────────
+    %% PATTERN 3
+    %% ─────────────────────────────────────────
+    subgraph P3["Pattern 3 — Private Networking: NCC + PrivateLink (Molina's Path)"]
+        direction LR
+
+        subgraph P3_SCP["Databricks Serverless Compute Plane"]
+            direction TB
+            SRV["🔵 Serverless\nCompute"]
+            CC3["🔵 Classic Compute\n(Alternative)"]
+        end
+
+        subgraph P3_NET["Private Network Path"]
+            direction TB
+            NCC["🔒 NCC Private\nEndpoint Rule"]
+            VPE["🔶 Atlas VPC\nEndpoint Service\n(PrivateLink)"]
+        end
+
+        subgraph P3_MDB["MongoDB Atlas"]
+            MDB3["🍃 Atlas Dedicated\nCluster (M10+)"]
+        end
+
+        P3_PEER["🔶 VPC / VNet Peering\n(Classic Alt)"]
+
+        SRV -->|"Private traffic"| NCC
+        NCC -->|"PrivateLink"| VPE
+        VPE --> MDB3
+        CC3 -->|"Alternative path"| P3_PEER
+        P3_PEER --> MDB3
+
+        NOTE3["🔏 All traffic stays\noff public internet"]
+        style NOTE3 fill:#FFF3E0,stroke:#E65100,stroke-width:1.5px,color:#BF360C
+    end
+
+    style P3 fill:#FCE4EC,stroke:#C62828,stroke-width:2px,color:#7B1FA2
+    style P3_SCP fill:#E3F2FD,stroke:#1565C0,stroke-width:1.5px
+    style P3_NET fill:#FFE0B2,stroke:#E65100,stroke-width:1.5px
+    style P3_MDB fill:#E8F5E9,stroke:#2E7D32,stroke-width:1.5px
+    style P3_PEER fill:#FFE0B2,stroke:#E65100,stroke-width:1.5px,color:#BF360C
+
+    %% ─────────────────────────────────────────
+    %% CROSS-CUTTING COMPONENTS
+    %% ─────────────────────────────────────────
+    subgraph CC_CUT["Cross-Cutting Governance & Future Capabilities"]
+        direction LR
+
+        UC["🏛️ Unity Catalog\n(Governs Access, Connections,\nCredentials, Lineage)"]
+        style UC fill:#E8EAF6,stroke:#3949AB,stroke-width:2px,color:#1A237E
+
+        LHF["↔ Lakehouse Federation\nto MongoDB\n⚠️ Coming Soon —\nValidate with Account Team"]
+        style LHF fill:#FAFAFA,stroke:#90A4AE,stroke-width:1.5px,stroke-dasharray:8 4,color:#546E7A
+
+        LFC_FUTURE["↺ Lakeflow Connect\nMongoDB Source\n🔧 In Development"]
+        style LFC_FUTURE fill:#FAFAFA,stroke:#90A4AE,stroke-width:1.5px,stroke-dasharray:8 4,color:#546E7A
+    end
+
+    style CC_CUT fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
+
+    %% Cross-cutting links
+    UC -.->|"governs"| P1_DELTA
+    UC -.->|"governs"| P2_DELTA
+    LHF -.->|"future direct query"| P1_MDB
+    LFC_FUTURE -.->|"future ingest"| P2_DELTA
