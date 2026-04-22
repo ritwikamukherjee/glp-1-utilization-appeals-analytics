@@ -97,22 +97,12 @@ function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [conversationId, setConversationId] = useState(null)
-  const [summary, setSummary] = useState(null)
-  const [summaryLoading, setSummaryLoading] = useState(true)
   const [tab, setTab] = useState('dashboard')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  useEffect(() => {
-    fetch('/api/summary')
-      .then(r => r.json())
-      .then(setSummary)
-      .catch(() => setSummary(null))
-      .finally(() => setSummaryLoading(false))
-  }, [])
 
   const sendMessage = async (e) => {
     e.preventDefault()
@@ -144,22 +134,13 @@ function App() {
     }
   }
 
-  const totalAppeals = summary?.appeals_by_status?.reduce((s, r) => s + Number(r.count), 0) || 0
-  const pendingAppeals = summary?.appeals_by_status?.find(r => r.appeal_status === 'Pending')?.count || 0
-  const deniedAppeals = summary?.appeals_by_status?.find(r => r.appeal_status === 'Denied')?.count || 0
-  const totalClaims = summary?.claims_by_status?.reduce((s, r) => s + Number(r.count), 0) || 0
-  const memberInfo = summary?.member_count?.[0] || {}
-  const overturnRate = summary?.appeals_by_status
-    ? Math.round(summary.appeals_by_status.reduce((s, r) => s + Number(r.overturned || 0), 0) / totalAppeals * 100)
-    : 0
-
   return (
     <div className="flex flex-col h-screen bg-slate-950">
       {/* Header */}
       <header className="bg-slate-900 border-b border-slate-800 text-white px-6 py-3 shadow-md flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">GLP-1 Claims & Appeals Assistant</h1>
-          <p className="text-teal-400 text-xs">Utilization & Adjudication Analytics — Powered by Databricks</p>
+          <h1 className="text-lg font-semibold tracking-tight">Claims & Appeals Adjudication Review</h1>
+          <p className="text-teal-400 text-xs">Appeals Intelligence — Powered by Databricks</p>
         </div>
         <nav className="flex gap-1 bg-slate-800 rounded-lg p-0.5">
           {['dashboard', 'chat'].map(t => (
@@ -176,135 +157,15 @@ function App() {
         </nav>
       </header>
 
-      {/* Dashboard Tab */}
+      {/* Dashboard Tab — embedded AI/BI dashboard */}
       {tab === 'dashboard' && (
-        <main className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full">
-          {summaryLoading ? (
-            <div className="flex items-center justify-center h-64 text-slate-500">Loading dashboard...</div>
-          ) : !summary ? (
-            <div className="flex items-center justify-center h-64 text-slate-500">Unable to load summary data</div>
-          ) : (
-            <>
-              {/* KPI Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <MetricCard label="Total Appeals" value={totalAppeals.toLocaleString()} sub={`${pendingAppeals} pending`} color="teal" />
-                <MetricCard label="Total Claims" value={totalClaims.toLocaleString()} color="blue" />
-                <MetricCard label="Overturn Rate" value={`${overturnRate}%`} sub="of decided appeals" color="amber" />
-                <MetricCard label="Members" value={Number(memberInfo.members || 0).toLocaleString()} sub={`${memberInfo.medicare || 0} Medicare`} color="teal" />
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-6 mb-6">
-                {/* Appeals by Status */}
-                <div className="bg-slate-800 rounded-xl shadow-sm ring-1 ring-slate-700 p-5">
-                  <h2 className="text-sm font-semibold text-slate-200 mb-3">Appeals by Status</h2>
-                  <div className="space-y-2">
-                    {summary.appeals_by_status?.map(row => {
-                      const pct = Math.round(Number(row.count) / totalAppeals * 100)
-                      const barColor = {
-                        Approved: 'bg-emerald-500', Denied: 'bg-red-500',
-                        Pending: 'bg-amber-500', 'Under Review': 'bg-blue-500', Withdrawn: 'bg-slate-500'
-                      }[row.appeal_status] || 'bg-slate-500'
-                      return (
-                        <div key={row.appeal_status}>
-                          <div className="flex justify-between text-xs mb-0.5">
-                            <span className="text-slate-300">{row.appeal_status}</span>
-                            <span className="text-slate-500">{row.count} ({pct}%)</span>
-                          </div>
-                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Top Denial Reasons */}
-                <div className="bg-slate-800 rounded-xl shadow-sm ring-1 ring-slate-700 p-5">
-                  <h2 className="text-sm font-semibold text-slate-200 mb-3">Top Denial Reasons</h2>
-                  <div className="space-y-2">
-                    {summary.top_denial_reasons?.map((row, i) => (
-                      <div key={i} className="flex items-center justify-between py-1.5 border-b border-slate-700 last:border-0">
-                        <span className="text-xs text-slate-300 truncate mr-2">{row.reason}</span>
-                        <span className="text-xs font-mono text-slate-400 shrink-0">{row.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Claims Summary */}
-              <div className="bg-slate-800 rounded-xl shadow-sm ring-1 ring-slate-700 p-5 mb-6">
-                <h2 className="text-sm font-semibold text-slate-200 mb-3">Claims Summary</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-slate-400 border-b border-slate-700">
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium text-right">Count</th>
-                        <th className="pb-2 font-medium text-right">Total Billed</th>
-                        <th className="pb-2 font-medium text-right">Total Paid</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.claims_by_status?.map(row => (
-                        <tr key={row.status} className="border-b border-slate-700/50">
-                          <td className="py-2"><StatusBadge status={row.status} /></td>
-                          <td className="py-2 text-right text-slate-300">{Number(row.count).toLocaleString()}</td>
-                          <td className="py-2 text-right text-slate-300">${Number(row.total_billed || 0).toLocaleString()}</td>
-                          <td className="py-2 text-right text-slate-300">${Number(row.total_paid || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Recent Appeals */}
-              <div className="bg-slate-800 rounded-xl shadow-sm ring-1 ring-slate-700 p-5">
-                <h2 className="text-sm font-semibold text-slate-200 mb-3">Recent Appeals</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-left text-slate-400 border-b border-slate-700">
-                        <th className="pb-2 font-medium">Appeal ID</th>
-                        <th className="pb-2 font-medium">Member</th>
-                        <th className="pb-2 font-medium">Type</th>
-                        <th className="pb-2 font-medium">Status</th>
-                        <th className="pb-2 font-medium">Denial Reason</th>
-                        <th className="pb-2 font-medium">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.recent_appeals?.map(row => (
-                        <tr key={row.appeal_id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                          <td className="py-2 font-mono text-teal-400">{row.appeal_id}</td>
-                          <td className="py-2 text-slate-300">{row.member_id}</td>
-                          <td className="py-2 text-slate-300">{row.appeal_type}</td>
-                          <td className="py-2"><StatusBadge status={row.appeal_status} /></td>
-                          <td className="py-2 text-slate-400 truncate max-w-[200px]">{row.original_denial_reason}</td>
-                          <td className="py-2 text-slate-500">{row.appeal_date}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* CTA to chat */}
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => setTab('chat')}
-                  className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-500 transition-colors shadow-sm"
-                >
-                  Ask the GLP-1 Assistant
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </button>
-              </div>
-            </>
-          )}
+        <main className="flex-1 overflow-hidden">
+          <iframe
+            src="https://fe-vm-hls-amer.cloud.databricks.com/embed/dashboardsv3/01f126e3280413729fa473ebb9f1d1a2?o=1602460480284688"
+            className="w-full h-full border-0"
+            title="Claims & Appeals Adjudication Review"
+            allow="fullscreen"
+          />
         </main>
       )}
 
